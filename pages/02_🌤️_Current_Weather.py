@@ -380,15 +380,31 @@ if weather:
         st.markdown("<br>", unsafe_allow_html=True)
         
         # Current Time & Timezone
-        current_time = datetime.now()
+        # Use timezone from API for accurate local time
         timezone = weather.get('timezone', 'UTC')
+        current_time_str = weather.get('time', '')
+        
+        # Parse the current time from API (which is in location's timezone)
+        if current_time_str:
+            try:
+                current_time = datetime.fromisoformat(current_time_str.replace('Z', '+00:00'))
+                time_display = current_time.strftime('%H:%M:%S')
+                date_display = current_time.strftime('%A, %B %d, %Y')
+            except:
+                current_time = datetime.now()
+                time_display = current_time.strftime('%H:%M:%S')
+                date_display = current_time.strftime('%A, %B %d, %Y')
+        else:
+            current_time = datetime.now()
+            time_display = current_time.strftime('%H:%M:%S')
+            date_display = current_time.strftime('%A, %B %d, %Y')
         
         st.markdown(f"""
         <div style="background: #f7fafc; padding: 1.5rem; border-radius: 8px; border: 2px solid #e2e8f0;">
-            <h4 style="margin: 0 0 1rem 0;">🕐 Current Time</h4>
-            <h2 style="color: #667eea; margin: 0;">{current_time.strftime('%H:%M:%S')}</h2>
+            <h4 style="margin: 0 0 1rem 0;">🕐 Local Time</h4>
+            <h2 style="color: #667eea; margin: 0;">{time_display}</h2>
             <p style="color: #666; margin: 0.5rem 0 0 0;">
-                {current_time.strftime('%A, %B %d, %Y')}
+                {date_display}
             </p>
             <p style="color: #666; margin: 0.5rem 0 0 0; font-size: 0.9rem;">
                 Timezone: {timezone}
