@@ -78,7 +78,13 @@ def get_current_weather(lat, lon):
                 "wind_direction_10m",
                 "wind_gusts_10m"
             ],
-            "timezone": "auto"
+            "daily": [
+                "sunrise",
+                "sunset",
+                "sunshine_duration"
+            ],
+            "timezone": "auto",
+            "forecast_days": 1
         }
         
         response = requests.get(FORECAST_URL, params=params, timeout=10)
@@ -87,6 +93,13 @@ def get_current_weather(lat, lon):
         
         if "current" in data:
             current = data["current"]
+            daily = data.get("daily", {})
+            
+            # Get today's astronomical data
+            sunrise = daily.get("sunrise", [None])[0] if daily else None
+            sunset = daily.get("sunset", [None])[0] if daily else None
+            sunshine_duration = daily.get("sunshine_duration", [0])[0] if daily else 0
+            
             return {
                 "temperature": current.get("temperature_2m"),
                 "feels_like": current.get("apparent_temperature"),
@@ -99,7 +112,10 @@ def get_current_weather(lat, lon):
                 "wind_direction": current.get("wind_direction_10m"),
                 "wind_gusts": current.get("wind_gusts_10m"),
                 "time": current.get("time"),
-                "timezone": data.get("timezone", "UTC")
+                "timezone": data.get("timezone", "UTC"),
+                "sunrise": sunrise,
+                "sunset": sunset,
+                "sunshine_duration": sunshine_duration
             }
         return None
     except Exception as e:

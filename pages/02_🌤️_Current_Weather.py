@@ -6,11 +6,13 @@ import streamlit as st
 import sys
 import os
 import plotly.graph_objects as go
+from datetime import datetime
 
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from utils.weather_api import get_current_weather, get_weather_emoji, get_weather_description
+from utils.moon_phase import calculate_moon_phase
 
 # Page configuration
 st.set_page_config(
