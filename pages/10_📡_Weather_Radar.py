@@ -155,10 +155,7 @@ if current and hourly is not None:
             [0.9, 'rgba(255, 69, 0, 0.9)'],
             [1, 'rgba(139, 0, 0, 1)']
         ],
-        colorbar=dict(
-            title="Precipitation (mm/h)",
-            titleside="right"
-        ),
+        colorbar=dict(title="Precipitation (mm/h)"),
         hovertemplate='Lat: %{y:.3f}<br>Lon: %{x:.3f}<br>Intensity: %{z:.1f} mm/h<extra></extra>'
     ))
     
