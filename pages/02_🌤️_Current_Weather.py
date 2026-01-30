@@ -291,6 +291,113 @@ if weather:
     
     st.markdown("---")
     
+    # Astronomical Data
+    st.markdown("### 🌅 Astronomical Data")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Sunrise & Sunset
+        sunrise = weather.get('sunrise')
+        sunset = weather.get('sunset')
+        
+        if sunrise and sunset:
+            # Parse times
+            sunrise_time = datetime.fromisoformat(sunrise.replace('Z', '+00:00'))
+            sunset_time = datetime.fromisoformat(sunset.replace('Z', '+00:00'))
+            
+            # Calculate daylight duration
+            daylight_seconds = (sunset_time - sunrise_time).total_seconds()
+            daylight_hours = daylight_seconds / 3600
+            daylight_minutes = (daylight_seconds % 3600) / 60
+            
+            st.markdown(f"""
+            <div style="background: linear-gradient(135deg, #f6d365 0%, #fda085 100%); 
+                        padding: 1.5rem; border-radius: 12px; color: white;">
+                <h4 style="margin: 0 0 1rem 0;">🌅 Sunrise & Sunset</h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div>
+                        <p style="margin: 0; opacity: 0.9;">Sunrise</p>
+                        <h3 style="margin: 0.3rem 0;">{sunrise_time.strftime('%H:%M')}</h3>
+                    </div>
+                    <div>
+                        <p style="margin: 0; opacity: 0.9;">Sunset</p>
+                        <h3 style="margin: 0.3rem 0;">{sunset_time.strftime('%H:%M')}</h3>
+                    </div>
+                </div>
+                <hr style="border-color: rgba(255,255,255,0.3); margin: 1rem 0;">
+                <p style="margin: 0;"><b>Daylight Duration:</b> {int(daylight_hours)}h {int(daylight_minutes)}m</p>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.info("Sunrise/Sunset data not available")
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        # Sunshine Duration
+        sunshine_duration = weather.get('sunshine_duration', 0)
+        sunshine_hours = sunshine_duration / 3600
+        
+        # Calculate sunshine percentage
+        if sunrise and sunset:
+            sunshine_percentage = (sunshine_duration / daylight_seconds) * 100 if daylight_seconds > 0 else 0
+        else:
+            sunshine_percentage = 0
+        
+        st.markdown(f"""
+        <div style="background: #f7fafc; padding: 1.5rem; border-radius: 8px; border: 2px solid #e2e8f0;">
+            <h4 style="margin: 0 0 1rem 0;">☀️ Sunshine Duration</h4>
+            <h2 style="color: #f6d365; margin: 0;">{sunshine_hours:.1f} hours</h2>
+            <p style="color: #666; margin: 0.5rem 0 0 0;">
+                {sunshine_percentage:.1f}% of daylight hours
+            </p>
+            <div style="background: #e2e8f0; height: 10px; border-radius: 5px; margin-top: 1rem; overflow: hidden;">
+                <div style="background: linear-gradient(90deg, #f6d365 0%, #fda085 100%); 
+                            height: 100%; width: {sunshine_percentage}%;"></div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        # Moon Phase
+        moon_data = calculate_moon_phase()
+        
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                    padding: 1.5rem; border-radius: 12px; color: white; text-align: center;">
+            <h4 style="margin: 0 0 1rem 0;">🌙 Moon Phase</h4>
+            <div style="font-size: 5rem; margin: 1rem 0;">{moon_data['emoji']}</div>
+            <h3 style="margin: 0.5rem 0;">{moon_data['phase_name']}</h3>
+            <p style="opacity: 0.9; margin: 0.5rem 0;">
+                Illumination: {moon_data['illumination']}%
+            </p>
+            <p style="opacity: 0.9; margin: 0; font-size: 0.9rem;">
+                Age: {moon_data['age_days']:.1f} days
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        # Current Time & Timezone
+        current_time = datetime.now()
+        timezone = weather.get('timezone', 'UTC')
+        
+        st.markdown(f"""
+        <div style="background: #f7fafc; padding: 1.5rem; border-radius: 8px; border: 2px solid #e2e8f0;">
+            <h4 style="margin: 0 0 1rem 0;">🕐 Current Time</h4>
+            <h2 style="color: #667eea; margin: 0;">{current_time.strftime('%H:%M:%S')}</h2>
+            <p style="color: #666; margin: 0.5rem 0 0 0;">
+                {current_time.strftime('%A, %B %d, %Y')}
+            </p>
+            <p style="color: #666; margin: 0.5rem 0 0 0; font-size: 0.9rem;">
+                Timezone: {timezone}
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
     # Wind information
     st.markdown("### 🌬️ Wind Information")
     
