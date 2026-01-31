@@ -141,13 +141,19 @@ if weather_df is not None and len(weather_df) > 0:
     with col4:
         if 'uv_index_max' in weather_df.columns:
             st.markdown("### ☀️ UV Index")
-            uv_mean = weather_df['uv_index_max'].mean()
-            uv_max = weather_df['uv_index_max'].max()
-            uv_category, uv_color, uv_emoji = get_uv_category(uv_mean)
+            # Drop NaN values for statistics
+            uv_data = weather_df['uv_index_max'].dropna()
             
-            st.metric("Avg Max", f"{uv_mean:.1f}")
-            st.metric("Highest", f"{uv_max:.1f}")
-            st.markdown(f"**Category:** {uv_emoji} {uv_category}")
+            if len(uv_data) > 0:
+                uv_mean = uv_data.mean()
+                uv_max = uv_data.max()
+                uv_category, uv_color, uv_emoji = get_uv_category(uv_mean)
+                
+                st.metric("Avg Max", f"{uv_mean:.1f}")
+                st.metric("Highest", f"{uv_max:.1f}")
+                st.markdown(f"**Category:** {uv_emoji} {uv_category}")
+            else:
+                st.markdown("*No UV data available*")
     
     st.markdown("---")
     
@@ -530,9 +536,14 @@ if weather_df is not None and len(weather_df) > 0:
     with cols[3]:
         if 'uv_index_max' in weather_df.columns:
             st.markdown("### UV Index")
-            uv_percentiles = np.percentile(weather_df['uv_index_max'], percentiles)
-            for p, val in zip(percentiles, uv_percentiles):
-                st.markdown(f"**{p}th:** {val:.1f}")
+            # Drop NaN values before calculating percentiles
+            uv_data = weather_df['uv_index_max'].dropna()
+            if len(uv_data) > 0:
+                uv_percentiles = np.percentile(uv_data, percentiles)
+                for p, val in zip(percentiles, uv_percentiles):
+                    st.markdown(f"**{p}th:** {val:.1f}")
+            else:
+                st.markdown("*No UV data available*")
     
     st.markdown("---")
     
@@ -583,12 +594,18 @@ if weather_df is not None and len(weather_df) > 0:
     
     # High UV days
     if 'uv_index_max' in weather_df.columns:
-        high_uv_days = weather_df[weather_df['uv_index_max'] >= 8]
-        st.metric(
-            "☀️ High UV Days (≥8)",
-            len(high_uv_days),
-            delta=f"{(len(high_uv_days)/len(weather_df)*100):.1f}% of days"
-        )
+        # Filter out NaN values
+        high_uv_days = weather_df[weather_df['uv_index_max'].notna() & (weather_df['uv_index_max'] >= 8)]
+        total_days_with_uv = len(weather_df[weather_df['uv_index_max'].notna()])
+        
+        if total_days_with_uv > 0:
+            st.metric(
+                "☀️ High UV Days (≥8)",
+                len(high_uv_days),
+                delta=f"{(len(high_uv_days)/total_days_with_uv*100):.1f}% of days with UV data"
+            )
+        else:
+            st.info("UV data not available for this period")
     
     st.markdown("---")
     
