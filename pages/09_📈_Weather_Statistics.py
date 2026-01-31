@@ -210,7 +210,12 @@ if weather_df is not None and len(weather_df) > 0:
             st.plotly_chart(fig_uv_pie, use_container_width=True)
         
         # UV Protection Advice
-        st.info(f"**☀️ UV Protection Advice:** {get_uv_protection_advice(uv_mean)}")
+        uv_data_for_advice = weather_df['uv_index_max'].dropna()
+        if len(uv_data_for_advice) > 0:
+            uv_mean_advice = uv_data_for_advice.mean()
+            st.info(f"**☀️ UV Protection Advice:** {get_uv_protection_advice(uv_mean_advice)}")
+        else:
+            st.info("**☀️ UV Protection Advice:** UV data not available for this period.")
         
         st.markdown("---")
     
