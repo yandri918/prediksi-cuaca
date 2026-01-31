@@ -37,6 +37,8 @@ def calculate_heat_index(temp_c, humidity):
 
 def get_uv_category(uv_index):
     """Get UV index category and color"""
+    if pd.isna(uv_index):
+        return "Unknown", "#718096", "❓"
     if uv_index < 3:
         return "Low", "#48bb78", "😊"
     elif uv_index < 6:
@@ -50,6 +52,8 @@ def get_uv_category(uv_index):
 
 def get_uv_protection_advice(uv_index):
     """Get UV protection recommendations"""
+    if pd.isna(uv_index):
+        return "UV data not available for this period."
     if uv_index < 3:
         return "Minimal protection needed. Safe to be outside."
     elif uv_index < 6:
