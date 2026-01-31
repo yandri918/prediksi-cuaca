@@ -18,14 +18,14 @@ from utils.weather_api import get_hourly_forecast, get_daily_forecast
 
 # Page configuration
 st.set_page_config(
-    page_title="Weather Radar",
+    page_title="Radar Cuaca",
     page_icon="📡",
     layout="wide"
 )
 
 # Header
-st.title("📡 Professional Weather Radar")
-st.markdown("**Real-time precipitation intensity and forecast visualization**")
+st.title("📡 Radar Cuaca Interaktif")
+st.markdown("**Visualisasi intensitas hujan dan prakiraan cuaca real-time**")
 
 # Check if location is selected
 if 'selected_lat' not in st.session_state:
@@ -55,7 +55,7 @@ if hourly_forecast is not None and len(hourly_forecast) > 0:
     # Current conditions
     current = hourly_forecast.iloc[0]
     
-    st.markdown("## 🌧️ Current Conditions")
+    st.markdown("## 🌧️ Kondisi Saat Ini")
     
     col1, col2, col3, col4 = st.columns(4)
     
@@ -64,39 +64,39 @@ if hourly_forecast is not None and len(hourly_forecast) > 0:
         precip_prob = current.get('precipitation_probability', 0)
         
         st.metric(
-            "Precipitation",
-            f"{precip:.1f} mm/h",
-            delta=f"{precip_prob:.0f}% probability"
+            "Intensitas Hujan",
+            f"{precip:.1f} mm/jam",
+            delta=f"{precip_prob:.0f}% kemungkinan"
         )
     
     with col2:
         cloud_cover = current.get('cloud_cover', 0)
         st.metric(
-            "Cloud Cover",
+            "Tutupan Awan",
             f"{cloud_cover:.0f}%",
-            delta="Overcast" if cloud_cover > 75 else "Clear" if cloud_cover < 25 else "Partly Cloudy"
+            delta="Mendung" if cloud_cover > 75 else "Cerah" if cloud_cover < 25 else "Berawan"
         )
     
     with col3:
         visibility = current.get('visibility', 0) / 1000  # Convert to km
         st.metric(
-            "Visibility",
+            "Jarak Pandang",
             f"{visibility:.1f} km",
-            delta="Good" if visibility > 10 else "Poor" if visibility < 5 else "Moderate"
+            delta="Baik" if visibility > 10 else "Buruk" if visibility < 5 else "Sedang"
         )
     
     with col4:
         wind_speed = current.get('wind_speed_10m', 0)
         st.metric(
-            "Wind Speed",
-            f"{wind_speed:.1f} km/h",
-            delta="Strong" if wind_speed > 30 else "Calm" if wind_speed < 10 else "Moderate"
+            "Kecepatan Angin",
+            f"{wind_speed:.1f} km/jam",
+            delta="Kencang" if wind_speed > 30 else "Tenang" if wind_speed < 10 else "Sedang"
         )
     
     st.markdown("---")
     
     # Professional Radar Visualization
-    st.markdown("## 📡 Precipitation Radar")
+    st.markdown("## 📡 Peta Radar Hujan")
     
     # Create realistic precipitation pattern
     lat = st.session_state['selected_lat']
@@ -164,13 +164,13 @@ if hourly_forecast is not None and len(hourly_forecast) > 0:
             [1.0, 'rgba(139, 0, 0, 1)']         # Dark red (extreme)
         ],
         colorbar=dict(
-            title="Intensity<br>(mm/h)",
+            title="Intensitas<br>(mm/jam)",
             tickmode="linear",
             tick0=0,
             dtick=2,
             len=0.7
         ),
-        hovertemplate='Lat: %{y:.3f}<br>Lon: %{x:.3f}<br>Intensity: %{z:.2f} mm/h<extra></extra>',
+        hovertemplate='Lat: %{y:.3f}<br>Lon: %{x:.3f}<br>Intensitas: %{z:.2f} mm/jam<extra></extra>',
         showscale=True
     ))
     
@@ -188,13 +188,13 @@ if hourly_forecast is not None and len(hourly_forecast) > 0:
         text=['📍'],
         textfont=dict(size=20),
         showlegend=False,
-        hovertemplate='<b>Your Location</b><br>Lat: %{lat:.3f}<br>Lon: %{lon:.3f}<extra></extra>'
+        hovertemplate='<b>Lokasi Anda</b><br>Lat: %{lat:.3f}<br>Lon: %{lon:.3f}<extra></extra>'
     ))
     
     # Update layout for professional look
     fig_radar.update_layout(
         title={
-            'text': 'Precipitation Intensity Radar',
+            'text': 'Peta Intensitas Hujan',
             'x': 0.5,
             'xanchor': 'center',
             'font': {'size': 20, 'color': '#2c3e50'}
@@ -223,7 +223,7 @@ if hourly_forecast is not None and len(hourly_forecast) > 0:
     st.markdown("---")
     
     # Precipitation Forecast Timeline
-    st.markdown("## ⏱️ 48-Hour Precipitation Forecast")
+    st.markdown("## ⏱️ Prakiraan Hujan 48 Jam")
     
     # Prepare hourly data
     hourly_forecast['time'] = pd.to_datetime(hourly_forecast['time'])
@@ -233,7 +233,7 @@ if hourly_forecast is not None and len(hourly_forecast) > 0:
     fig_forecast = make_subplots(
         rows=2, cols=1,
         row_heights=[0.6, 0.4],
-        subplot_titles=('Precipitation Intensity', 'Precipitation Probability'),
+        subplot_titles=('Intensitas Hujan', 'Kemungkinan Hujan'),
         vertical_spacing=0.12
     )
     
@@ -242,24 +242,24 @@ if hourly_forecast is not None and len(hourly_forecast) > 0:
         go.Scatter(
             x=hourly_forecast['time'],
             y=hourly_forecast['precipitation'],
-            name='Precipitation',
+            name='Intensitas Hujan',
             fill='tozeroy',
             line=dict(color='#3498db', width=2),
             fillcolor='rgba(52, 152, 219, 0.3)',
-            hovertemplate='<b>%{x|%b %d, %H:%M}</b><br>Intensity: %{y:.2f} mm/h<extra></extra>'
+            hovertemplate='<b>%{x|%b %d, %H:%M}</b><br>Intensitas: %{y:.2f} mm/jam<extra></extra>'
         ),
         row=1, col=1
     )
     
     # Add intensity zones
     fig_forecast.add_hrect(y0=0, y1=2.5, fillcolor="green", opacity=0.1, 
-                          annotation_text="Light", annotation_position="right",
+                          annotation_text="Ringan", annotation_position="right",
                           row=1, col=1)
     fig_forecast.add_hrect(y0=2.5, y1=10, fillcolor="yellow", opacity=0.1,
-                          annotation_text="Moderate", annotation_position="right",
+                          annotation_text="Sedang", annotation_position="right",
                           row=1, col=1)
     fig_forecast.add_hrect(y0=10, y1=50, fillcolor="orange", opacity=0.1,
-                          annotation_text="Heavy", annotation_position="right",
+                          annotation_text="Lebat", annotation_position="right",
                           row=1, col=1)
     
     # Precipitation probability
@@ -267,26 +267,26 @@ if hourly_forecast is not None and len(hourly_forecast) > 0:
         go.Scatter(
             x=hourly_forecast['time'],
             y=hourly_forecast['precipitation_probability'],
-            name='Probability',
+            name='Kemungkinan',
             fill='tozeroy',
             line=dict(color='#9b59b6', width=2),
             fillcolor='rgba(155, 89, 182, 0.3)',
-            hovertemplate='<b>%{x|%b %d, %H:%M}</b><br>Probability: %{y:.0f}%<extra></extra>'
+            hovertemplate='<b>%{x|%b %d, %H:%M}</b><br>Kemungkinan: %{y:.0f}%<extra></extra>'
         ),
         row=2, col=1
     )
     
     # Update axes
-    fig_forecast.update_xaxes(title_text="Time", row=2, col=1)
-    fig_forecast.update_yaxes(title_text="Intensity (mm/h)", row=1, col=1)
-    fig_forecast.update_yaxes(title_text="Probability (%)", range=[0, 100], row=2, col=1)
+    fig_forecast.update_xaxes(title_text="Waktu", row=2, col=1)
+    fig_forecast.update_yaxes(title_text="Intensitas (mm/jam)", row=1, col=1)
+    fig_forecast.update_yaxes(title_text="Kemungkinan (%)", range=[0, 100], row=2, col=1)
     
     fig_forecast.update_layout(
         height=600,
         hovermode='x unified',
         showlegend=False,
         title={
-            'text': 'Detailed Precipitation Forecast',
+            'text': 'Prakiraan Hujan Detail',
             'x': 0.5,
             'xanchor': 'center'
         }
@@ -329,7 +329,7 @@ if hourly_forecast is not None and len(hourly_forecast) > 0:
             )
     
     with col2:
-        st.markdown("### 📊 Current Statistics")
+        st.markdown("### 📊 Statistik Saat Ini")
         
         # Calculate statistics
         next_24h = hourly_forecast.head(24)
@@ -337,26 +337,26 @@ if hourly_forecast is not None and len(hourly_forecast) > 0:
         max_intensity = next_24h['precipitation'].max()
         avg_prob = next_24h['precipitation_probability'].mean()
         
-        st.metric("24h Total", f"{total_precip_24h:.1f} mm")
-        st.metric("Max Intensity", f"{max_intensity:.1f} mm/h")
-        st.metric("Avg Probability", f"{avg_prob:.0f}%")
+        st.metric("Total 24 Jam", f"{total_precip_24h:.1f} mm")
+        st.metric("Intensitas Maks", f"{max_intensity:.1f} mm/jam")
+        st.metric("Rata-rata Kemungkinan", f"{avg_prob:.0f}%")
         
         # Rain likelihood
         if avg_prob > 70:
-            st.success("🌧️ High chance of rain")
+            st.success("🌧️ Kemungkinan hujan tinggi")
         elif avg_prob > 40:
-            st.warning("⛅ Moderate chance of rain")
+            st.warning("⛅ Kemungkinan hujan sedang")
         else:
-            st.info("☀️ Low chance of rain")
+            st.info("☀️ Kemungkinan hujan rendah")
     
     st.markdown("---")
     
     # Cloud Cover & Visibility Analysis
-    st.markdown("## ☁️ Atmospheric Conditions")
+    st.markdown("## ☁️ Kondisi Atmosfer")
     
     fig_atmos = make_subplots(
         rows=1, cols=2,
-        subplot_titles=('Cloud Cover', 'Visibility'),
+        subplot_titles=('Tutupan Awan', 'Jarak Pandang'),
         specs=[[{'type': 'scatter'}, {'type': 'scatter'}]]
     )
     
@@ -365,11 +365,11 @@ if hourly_forecast is not None and len(hourly_forecast) > 0:
         go.Scatter(
             x=hourly_forecast['time'],
             y=hourly_forecast['cloud_cover'],
-            name='Cloud Cover',
+            name='Tutupan Awan',
             fill='tozeroy',
             line=dict(color='#95a5a6', width=2),
             fillcolor='rgba(149, 165, 166, 0.3)',
-            hovertemplate='<b>%{x|%H:%M}</b><br>Cloud: %{y:.0f}%<extra></extra>'
+            hovertemplate='<b>%{x|%H:%M}</b><br>Awan: %{y:.0f}%<extra></extra>'
         ),
         row=1, col=1
     )
@@ -379,17 +379,17 @@ if hourly_forecast is not None and len(hourly_forecast) > 0:
         go.Scatter(
             x=hourly_forecast['time'],
             y=hourly_forecast['visibility'] / 1000,  # Convert to km
-            name='Visibility',
+            name='Jarak Pandang',
             line=dict(color='#16a085', width=2),
-            hovertemplate='<b>%{x|%H:%M}</b><br>Visibility: %{y:.1f} km<extra></extra>'
+            hovertemplate='<b>%{x|%H:%M}</b><br>Jarak Pandang: %{y:.1f} km<extra></extra>'
         ),
         row=1, col=2
     )
     
-    fig_atmos.update_xaxes(title_text="Time", row=1, col=1)
-    fig_atmos.update_xaxes(title_text="Time", row=1, col=2)
-    fig_atmos.update_yaxes(title_text="Coverage (%)", range=[0, 100], row=1, col=1)
-    fig_atmos.update_yaxes(title_text="Distance (km)", row=1, col=2)
+    fig_atmos.update_xaxes(title_text="Waktu", row=1, col=1)
+    fig_atmos.update_xaxes(title_text="Waktu", row=1, col=2)
+    fig_atmos.update_yaxes(title_text="Tutupan (%)", range=[0, 100], row=1, col=1)
+    fig_atmos.update_yaxes(title_text="Jarak (km)", row=1, col=2)
     
     fig_atmos.update_layout(
         height=400,
