@@ -1,487 +1,569 @@
 """
-Current Weather Dashboard
-Comprehensive real-time weather information
+Advanced Current Weather Dashboard
+Comprehensive real-time weather information with advanced features
 """
 import streamlit as st
 import sys
 import os
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 from datetime import datetime
+import pandas as pd
+import numpy as np
 
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from utils.weather_api import get_current_weather, get_weather_emoji, get_weather_description
+from utils.weather_api import get_current_weather, get_weather_emoji, get_weather_description, get_hourly_forecast
 from utils.moon_phase import calculate_moon_phase
 
 # Page configuration
 st.set_page_config(
-    page_title="Current Weather",
+    page_title="Cuaca Saat Ini",
     page_icon="🌤️",
     layout="wide"
 )
 
+# Utility functions
+def get_comfort_level(temp, humidity):
+    """Calculate weather comfort level"""
+    # Heat index calculation
+    if temp >= 27:
+        hi = -8.78469475556 + 1.61139411*temp + 2.33854883889*humidity
+        hi += -0.14611605*temp*humidity + -0.012308094*temp*temp
+        hi += -0.0164248277778*humidity*humidity + 0.002211732*temp*temp*humidity
+        hi += 0.00072546*temp*humidity*humidity + -0.000003582*temp*temp*humidity*humidity
+        
+        if hi < 27:
+            return "Nyaman", "#48bb78", "😊"
+        elif hi < 32:
+            return "Cukup Nyaman", "#ed8936", "😐"
+        elif hi < 41:
+            return "Tidak Nyaman", "#dd6b20", "😰"
+        else:
+            return "Sangat Tidak Nyaman", "#c53030", "🥵"
+    else:
+        if temp < 10:
+            return "Dingin", "#4299e1", "🥶"
+        elif temp < 20:
+            return "Sejuk", "#48bb78", "😊"
+        else:
+            return "Nyaman", "#48bb78", "😊"
+
+def get_uv_risk(hour):
+    """Estimate UV risk based on time of day"""
+    if 10 <= hour <= 16:
+        return "Tinggi", "#e53e3e", "☀️"
+    elif 8 <= hour < 10 or 16 < hour <= 18:
+        return "Sedang", "#ed8936", "🌤️"
+    else:
+        return "Rendah", "#48bb78", "🌙"
+
+def get_air_quality_estimate(visibility, humidity):
+    """Estimate air quality from visibility and humidity"""
+    if visibility > 10000:
+        return "Baik", "#48bb78", "😊", 50
+    elif visibility > 5000:
+        return "Sedang", "#ed8936", "😐", 100
+    else:
+        return "Buruk", "#e53e3e", "😷", 150
+
 # Custom CSS
 st.markdown("""
 <style>
-    .weather-card {
+    .weather-hero {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 2rem;
-        border-radius: 12px;
+        padding: 3rem 2rem;
+        border-radius: 16px;
         color: white;
         text-align: center;
         margin: 1rem 0;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
     }
     
-    .metric-box {
-        background: #f7fafc;
+    .metric-card {
+        background: white;
         padding: 1.5rem;
-        border-radius: 8px;
+        border-radius: 12px;
         text-align: center;
         border: 2px solid #e2e8f0;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        transition: transform 0.2s;
+    }
+    
+    .metric-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    
+    .comfort-badge {
+        display: inline-block;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-weight: bold;
+        margin: 0.5rem;
+    }
+    
+    .alert-box {
+        background: #fff5f5;
+        border-left: 4px solid #e53e3e;
+        padding: 1rem;
+        border-radius: 4px;
+        margin: 1rem 0;
     }
 </style>
 """, unsafe_allow_html=True)
 
 # Header
-st.title("🌤️ Current Weather Dashboard")
-st.markdown("**Real-time weather conditions for your selected location**")
+st.title("🌤️ Dashboard Cuaca Saat Ini")
+st.markdown("**Informasi cuaca real-time dengan analisis lengkap**")
 
 # Check if location is selected
 if 'selected_lat' not in st.session_state:
-    st.warning("⚠️ No location selected. Please select a location from the Interactive Map page first.")
-    if st.button("🗺️ Go to Interactive Map"):
+    st.warning("⚠️ Belum ada lokasi yang dipilih. Silakan pilih lokasi dari halaman Peta Interaktif terlebih dahulu.")
+    if st.button("🗺️ Ke Peta Interaktif"):
         st.switch_page("pages/01_🗺️_Interactive_Map.py")
     st.stop()
 
-st.markdown(f"**📍 Location:** {st.session_state.get('selected_location', 'Unknown')}")
+st.markdown(f"**📍 Lokasi:** {st.session_state.get('selected_location', 'Unknown')}")
 st.markdown("---")
 
-# Fetch current weather
-with st.spinner("Fetching current weather data..."):
+# Fetch current weather and hourly forecast
+with st.spinner("Mengambil data cuaca..."):
     weather = get_current_weather(
         st.session_state['selected_lat'],
         st.session_state['selected_lon']
+    )
+    
+    hourly_forecast = get_hourly_forecast(
+        st.session_state['selected_lat'],
+        st.session_state['selected_lon'],
+        hours=12
     )
 
 if weather:
     emoji = get_weather_emoji(weather.get('weather_code', 0))
     description = get_weather_description(weather.get('weather_code', 0))
     
-    # Main weather display
+    # Get current time from API
+    timezone = weather.get('timezone', 'UTC')
+    current_time_str = weather.get('time', '')
+    
+    if current_time_str:
+        try:
+            current_time = datetime.fromisoformat(current_time_str.replace('Z', '+00:00'))
+            time_display = current_time.strftime('%H:%M:%S')
+            date_display = current_time.strftime('%A, %d %B %Y')
+            current_hour = current_time.hour
+        except:
+            current_time = datetime.now()
+            time_display = current_time.strftime('%H:%M:%S')
+            date_display = current_time.strftime('%A, %d %B %Y')
+            current_hour = current_time.hour
+    else:
+        current_time = datetime.now()
+        time_display = current_time.strftime('%H:%M:%S')
+        date_display = current_time.strftime('%A, %d %B %Y')
+        current_hour = current_time.hour
+    
+    # Calculate comfort and other indices
+    temp = weather.get('temperature', 0)
+    humidity = weather.get('humidity', 0)
+    comfort_level, comfort_color, comfort_emoji = get_comfort_level(temp, humidity)
+    uv_risk, uv_color, uv_emoji = get_uv_risk(current_hour)
+    
+    # Main weather hero section
     st.markdown(f"""
-    <div class="weather-card">
-        <div style="font-size: 5rem;">{emoji}</div>
-        <h2 style="margin: 1rem 0;">{description}</h2>
-        <h1 style="font-size: 4rem; margin: 0;">{weather.get('temperature', 'N/A')}°C</h1>
-        <p style="font-size: 1.2rem; opacity: 0.9;">Feels like {weather.get('feels_like', 'N/A')}°C</p>
+    <div class="weather-hero">
+        <div style="font-size: 6rem; margin-bottom: 1rem;">{emoji}</div>
+        <h2 style="margin: 0.5rem 0; font-size: 2rem;">{description}</h2>
+        <h1 style="font-size: 5rem; margin: 1rem 0; font-weight: bold;">{temp}°C</h1>
+        <p style="font-size: 1.3rem; opacity: 0.9;">Terasa seperti {weather.get('feels_like', 'N/A')}°C</p>
+        <div style="margin-top: 1.5rem; font-size: 1rem; opacity: 0.8;">
+            <p style="margin: 0.3rem 0;">{date_display}</p>
+            <p style="margin: 0.3rem 0; font-size: 1.5rem; font-weight: bold;">{time_display}</p>
+            <p style="margin: 0.3rem 0;">Zona Waktu: {timezone}</p>
+        </div>
     </div>
     """, unsafe_allow_html=True)
     
     st.markdown("---")
     
-    # Detailed metrics
-    st.markdown("### 📊 Detailed Metrics")
+    # Comfort & Health Indicators
+    st.markdown("## 🌡️ Indikator Kenyamanan & Kesehatan")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown(f"""
+        <div style="background: {comfort_color}22; padding: 1.5rem; border-radius: 12px; border: 2px solid {comfort_color};">
+            <div style="font-size: 3rem; text-align: center;">{comfort_emoji}</div>
+            <h3 style="text-align: center; color: {comfort_color}; margin: 0.5rem 0;">Tingkat Kenyamanan</h3>
+            <p style="text-align: center; font-size: 1.2rem; font-weight: bold; margin: 0;">{comfort_level}</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown(f"""
+        <div style="background: {uv_color}22; padding: 1.5rem; border-radius: 12px; border: 2px solid {uv_color};">
+            <div style="font-size: 3rem; text-align: center;">{uv_emoji}</div>
+            <h3 style="text-align: center; color: {uv_color}; margin: 0.5rem 0;">Risiko UV</h3>
+            <p style="text-align: center; font-size: 1.2rem; font-weight: bold; margin: 0;">{uv_risk}</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        # Air quality estimate
+        visibility = weather.get('cloud_cover', 50)  # Using cloud cover as proxy
+        aq_level, aq_color, aq_emoji, aqi = get_air_quality_estimate(10000 - visibility*100, humidity)
+        
+        st.markdown(f"""
+        <div style="background: {aq_color}22; padding: 1.5rem; border-radius: 12px; border: 2px solid {aq_color};">
+            <div style="font-size: 3rem; text-align: center;">{aq_emoji}</div>
+            <h3 style="text-align: center; color: {aq_color}; margin: 0.5rem 0;">Kualitas Udara</h3>
+            <p style="text-align: center; font-size: 1.2rem; font-weight: bold; margin: 0;">{aq_level}</p>
+            <p style="text-align: center; font-size: 0.9rem; color: #666; margin: 0.5rem 0;">AQI: ~{aqi}</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # Detailed Current Conditions
+    st.markdown("## 📊 Kondisi Detail Saat Ini")
     
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.markdown(f"""
-        <div class="metric-box">
-            <div style="font-size: 2rem;">💧</div>
-            <h3>{weather.get('humidity', 'N/A')}%</h3>
-            <p style="color: #666; margin: 0;">Humidity</p>
-        </div>
-        """, unsafe_allow_html=True)
+        st.metric(
+            "💧 Kelembaban",
+            f"{humidity}%",
+            delta="Optimal" if 40 <= humidity <= 60 else "Tinggi" if humidity > 60 else "Rendah"
+        )
     
     with col2:
-        st.markdown(f"""
-        <div class="metric-box">
-            <div style="font-size: 2rem;">🌬️</div>
-            <h3>{weather.get('wind_speed', 'N/A')} km/h</h3>
-            <p style="color: #666; margin: 0;">Wind Speed</p>
-        </div>
-        """, unsafe_allow_html=True)
+        wind_speed = weather.get('wind_speed', 0)
+        st.metric(
+            "🌬️ Kecepatan Angin",
+            f"{wind_speed:.1f} km/jam",
+            delta="Kencang" if wind_speed > 30 else "Tenang"
+        )
     
     with col3:
-        st.markdown(f"""
-        <div class="metric-box">
-            <div style="font-size: 2rem;">🌡️</div>
-            <h3>{weather.get('pressure', 'N/A')} hPa</h3>
-            <p style="color: #666; margin: 0;">Pressure</p>
-        </div>
-        """, unsafe_allow_html=True)
+        pressure = weather.get('pressure', 0)
+        st.metric(
+            "🔽 Tekanan Udara",
+            f"{pressure:.0f} hPa",
+            delta="Tinggi" if pressure > 1013 else "Rendah"
+        )
     
     with col4:
-        st.markdown(f"""
-        <div class="metric-box">
-            <div style="font-size: 2rem;">☁️</div>
-            <h3>{weather.get('cloud_cover', 'N/A')}%</h3>
-            <p style="color: #666; margin: 0;">Cloud Cover</p>
-        </div>
-        """, unsafe_allow_html=True)
+        cloud_cover = weather.get('cloud_cover', 0)
+        st.metric(
+            "☁️ Tutupan Awan",
+            f"{cloud_cover}%",
+            delta="Mendung" if cloud_cover > 75 else "Cerah"
+        )
     
     st.markdown("---")
     
-    # Additional Detailed Metrics
-    st.markdown("### 🔬 Advanced Atmospheric Metrics")
+    # Atmospheric Analysis
+    st.markdown("## 🌍 Analisis Atmosfer")
     
     col1, col2 = st.columns(2)
     
     with col1:
-        # Calculate dew point (approximation)
-        temp = weather.get('temperature', 0)
-        humidity = weather.get('humidity', 0)
+        # Create gauge chart for humidity
+        fig_humidity = go.Figure(go.Indicator(
+            mode="gauge+number+delta",
+            value=humidity,
+            domain={'x': [0, 1], 'y': [0, 1]},
+            title={'text': "Kelembaban Relatif (%)"},
+            delta={'reference': 50},
+            gauge={
+                'axis': {'range': [None, 100]},
+                'bar': {'color': "#3498db"},
+                'steps': [
+                    {'range': [0, 30], 'color': "#ffeaa7"},
+                    {'range': [30, 60], 'color': "#55efc4"},
+                    {'range': [60, 100], 'color': "#74b9ff"}
+                ],
+                'threshold': {
+                    'line': {'color': "red", 'width': 4},
+                    'thickness': 0.75,
+                    'value': 80
+                }
+            }
+        ))
         
-        # Magnus formula for dew point
-        a = 17.27
-        b = 237.7
-        alpha = ((a * temp) / (b + temp)) + (humidity / 100.0)
-        dew_point = (b * alpha) / (a - alpha) if alpha < a else temp
-        
-        st.markdown(f"""
-        <div style="background: #f7fafc; padding: 1.5rem; border-radius: 8px; border: 2px solid #e2e8f0;">
-            <h4 style="margin: 0 0 1rem 0;">💧 Dew Point</h4>
-            <h2 style="color: #4299e1; margin: 0;">{dew_point:.1f}°C</h2>
-            <p style="color: #666; margin: 0.5rem 0 0 0; font-size: 0.9rem;">
-                Temperature at which air becomes saturated
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        st.markdown("<br>", unsafe_allow_html=True)
-        
-        # Precipitation
-        st.markdown(f"""
-        <div style="background: #f7fafc; padding: 1.5rem; border-radius: 8px; border: 2px solid #e2e8f0;">
-            <h4 style="margin: 0 0 1rem 0;">🌧️ Precipitation</h4>
-            <h2 style="color: #4299e1; margin: 0;">{weather.get('precipitation', 0):.1f} mm</h2>
-            <p style="color: #666; margin: 0.5rem 0 0 0; font-size: 0.9rem;">
-                Current precipitation amount
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
+        fig_humidity.update_layout(height=300, margin=dict(l=20, r=20, t=50, b=20))
+        st.plotly_chart(fig_humidity, use_container_width=True)
     
     with col2:
-        # Altimeter / Barometer
-        pressure = weather.get('pressure', 1013.25)
+        # Create gauge chart for pressure
+        fig_pressure = go.Figure(go.Indicator(
+            mode="gauge+number+delta",
+            value=pressure,
+            domain={'x': [0, 1], 'y': [0, 1]},
+            title={'text': "Tekanan Atmosfer (hPa)"},
+            delta={'reference': 1013},
+            gauge={
+                'axis': {'range': [950, 1050]},
+                'bar': {'color': "#9b59b6"},
+                'steps': [
+                    {'range': [950, 1000], 'color': "#ffcccc"},
+                    {'range': [1000, 1020], 'color': "#ccffcc"},
+                    {'range': [1020, 1050], 'color': "#ccccff"}
+                ],
+                'threshold': {
+                    'line': {'color': "red", 'width': 4},
+                    'thickness': 0.75,
+                    'value': 1030
+                }
+            }
+        ))
         
-        # Calculate approximate altitude from pressure (barometric formula)
-        # Standard atmosphere: P = P0 * (1 - 0.0065*h/288.15)^5.255
-        # Solving for h: h = 288.15/0.0065 * (1 - (P/P0)^(1/5.255))
-        P0 = 1013.25  # Sea level standard pressure
-        altitude = (288.15 / 0.0065) * (1 - (pressure / P0) ** (1 / 5.255))
-        
-        # Pressure tendency (simplified)
-        if pressure > 1020:
-            pressure_trend = "High - Fair weather expected"
-            trend_color = "#48bb78"
-            trend_icon = "📈"
-        elif pressure < 1000:
-            pressure_trend = "Low - Stormy weather possible"
-            trend_color = "#e53e3e"
-            trend_icon = "📉"
-        else:
-            pressure_trend = "Normal - Stable conditions"
-            trend_color = "#4299e1"
-            trend_icon = "➡️"
-        
-        st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                    padding: 1.5rem; border-radius: 12px; color: white;">
-            <h4 style="margin: 0 0 1rem 0;">🎚️ Altimeter / Barometer</h4>
-            <h2 style="margin: 0;">{pressure:.2f} hPa</h2>
-            <p style="opacity: 0.9; margin: 0.5rem 0; font-size: 0.9rem;">
-                {pressure * 0.02953:.2f} inHg
-            </p>
-            <hr style="border-color: rgba(255,255,255,0.3); margin: 1rem 0;">
-            <p style="margin: 0.3rem 0;"><b>Estimated Altitude:</b> {altitude:.0f} m ({altitude * 3.28084:.0f} ft)</p>
-            <p style="margin: 0.3rem 0;"><b>Trend:</b> {trend_icon} {pressure_trend}</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        st.markdown("<br>", unsafe_allow_html=True)
-        
-        # Wind Gusts
-        st.markdown(f"""
-        <div style="background: #f7fafc; padding: 1.5rem; border-radius: 8px; border: 2px solid #e2e8f0;">
-            <h4 style="margin: 0 0 1rem 0;">💨 Wind Gusts</h4>
-            <h2 style="color: #9f7aea; margin: 0;">{weather.get('wind_gusts', 'N/A')} km/h</h2>
-            <p style="color: #666; margin: 0.5rem 0 0 0; font-size: 0.9rem;">
-                Maximum wind gust speed
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
+        fig_pressure.update_layout(height=300, margin=dict(l=20, r=20, t=50, b=20))
+        st.plotly_chart(fig_pressure, use_container_width=True)
     
     st.markdown("---")
     
-    # Atmospheric Conditions Analysis
-    st.markdown("### 🌍 Atmospheric Conditions Analysis")
+    # Wind Analysis
+    st.markdown("## 💨 Analisis Angin")
     
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns([1, 1])
     
     with col1:
-        # Comfort Index
-        comfort_index = "Comfortable"
-        comfort_color = "#48bb78"
+        # Wind compass
+        wind_direction = weather.get('wind_direction', 0)
+        wind_gusts = weather.get('wind_gusts', 0)
         
-        if temp > 30 or temp < 10:
-            comfort_index = "Uncomfortable"
-            comfort_color = "#e53e3e"
-        elif temp > 25 or temp < 15:
-            comfort_index = "Moderate"
-            comfort_color = "#ed8936"
+        # Create wind rose
+        fig_wind = go.Figure()
         
-        st.markdown(f"""
-        **🌡️ Comfort Level**
+        fig_wind.add_trace(go.Scatterpolar(
+            r=[wind_speed],
+            theta=[wind_direction],
+            mode='markers',
+            marker=dict(size=20, color='#e74c3c'),
+            name='Angin Saat Ini'
+        ))
         
-        <div style="background: {comfort_color}; color: white; padding: 0.5rem 1rem; 
-                    border-radius: 8px; text-align: center; font-weight: 700;">
-            {comfort_index}
-        </div>
+        fig_wind.update_layout(
+            polar=dict(
+                radialaxis=dict(range=[0, max(50, wind_speed + 10)], showticklabels=True),
+                angularaxis=dict(direction="clockwise")
+            ),
+            title="Kompas Angin",
+            height=400
+        )
         
-        Based on temperature: {temp}°C
-        """, unsafe_allow_html=True)
+        st.plotly_chart(fig_wind, use_container_width=True)
     
     with col2:
-        # Air Quality Indicator (based on pressure and humidity)
-        if humidity < 30:
-            air_quality = "Dry Air"
-            aq_color = "#ed8936"
-        elif humidity > 70:
-            air_quality = "Humid Air"
-            aq_color = "#4299e1"
-        else:
-            air_quality = "Good"
-            aq_color = "#48bb78"
+        st.markdown("### 🌬️ Detail Angin")
+        
+        # Wind direction in text
+        directions = ['Utara', 'Timur Laut', 'Timur', 'Tenggara', 'Selatan', 'Barat Daya', 'Barat', 'Barat Laut']
+        direction_idx = int((wind_direction + 22.5) / 45) % 8
+        direction_text = directions[direction_idx]
         
         st.markdown(f"""
-        **💨 Air Quality Indicator**
-        
-        <div style="background: {aq_color}; color: white; padding: 0.5rem 1rem; 
-                    border-radius: 8px; text-align: center; font-weight: 700;">
-            {air_quality}
+        <div style="background: #f7fafc; padding: 1.5rem; border-radius: 8px; margin: 1rem 0;">
+            <h4 style="margin: 0 0 1rem 0;">Informasi Angin</h4>
+            <p style="margin: 0.5rem 0;"><strong>Arah:</strong> {direction_text} ({wind_direction}°)</p>
+            <p style="margin: 0.5rem 0;"><strong>Kecepatan:</strong> {wind_speed:.1f} km/jam</p>
+            <p style="margin: 0.5rem 0;"><strong>Hembusan:</strong> {wind_gusts:.1f} km/jam</p>
+            <p style="margin: 0.5rem 0;"><strong>Skala Beaufort:</strong> {min(12, int(wind_speed / 5))}</p>
         </div>
-        
-        Humidity: {humidity}%
         """, unsafe_allow_html=True)
+        
+        # Wind strength indicator
+        if wind_speed < 5:
+            wind_desc = "Tenang - Ideal untuk aktivitas luar ruangan"
+        elif wind_speed < 20:
+            wind_desc = "Sepoi-sepoi - Nyaman untuk aktivitas"
+        elif wind_speed < 40:
+            wind_desc = "Sedang - Berhati-hati saat beraktivitas"
+        else:
+            wind_desc = "Kencang - Hindari aktivitas luar ruangan"
+        
+        st.info(f"💨 **{wind_desc}**")
     
-    with col3:
-        # Weather Stability
-        if 1010 <= pressure <= 1020:
-            stability = "Stable"
-            stab_color = "#48bb78"
-        elif pressure > 1020:
-            stability = "Very Stable"
-            stab_color = "#4299e1"
-        else:
-            stability = "Unstable"
-            stab_color = "#e53e3e"
+    st.markdown("---")
+    
+    # Hourly Mini Forecast
+    if hourly_forecast is not None and len(hourly_forecast) > 0:
+        st.markdown("## ⏰ Prakiraan 12 Jam Ke Depan")
         
-        st.markdown(f"""
-        **⚖️ Weather Stability**
+        hourly_forecast['time'] = pd.to_datetime(hourly_forecast['time'])
+        hourly_forecast['hour'] = hourly_forecast['time'].dt.strftime('%H:%M')
         
-        <div style="background: {stab_color}; color: white; padding: 0.5rem 1rem; 
-                    border-radius: 8px; text-align: center; font-weight: 700;">
-            {stability}
-        </div>
+        # Create hourly forecast chart
+        fig_hourly = make_subplots(
+            rows=2, cols=1,
+            row_heights=[0.6, 0.4],
+            subplot_titles=('Suhu & Terasa Seperti', 'Kemungkinan Hujan'),
+            vertical_spacing=0.15
+        )
         
-        Pressure: {pressure:.1f} hPa
-        """, unsafe_allow_html=True)
+        # Temperature
+        fig_hourly.add_trace(
+            go.Scatter(
+                x=hourly_forecast['time'],
+                y=hourly_forecast['temperature_2m'],
+                name='Suhu Aktual',
+                line=dict(color='#e74c3c', width=3),
+                mode='lines+markers'
+            ),
+            row=1, col=1
+        )
+        
+        fig_hourly.add_trace(
+            go.Scatter(
+                x=hourly_forecast['time'],
+                y=hourly_forecast['apparent_temperature'],
+                name='Terasa Seperti',
+                line=dict(color='#3498db', width=2, dash='dash'),
+                mode='lines'
+            ),
+            row=1, col=1
+        )
+        
+        # Precipitation probability
+        fig_hourly.add_trace(
+            go.Bar(
+                x=hourly_forecast['time'],
+                y=hourly_forecast['precipitation_probability'],
+                name='Kemungkinan Hujan',
+                marker_color='#3498db',
+                opacity=0.7
+            ),
+            row=2, col=1
+        )
+        
+        fig_hourly.update_xaxes(title_text="Waktu", row=2, col=1)
+        fig_hourly.update_yaxes(title_text="Suhu (°C)", row=1, col=1)
+        fig_hourly.update_yaxes(title_text="Kemungkinan (%)", range=[0, 100], row=2, col=1)
+        
+        fig_hourly.update_layout(
+            height=500,
+            hovermode='x unified',
+            showlegend=True,
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        )
+        
+        st.plotly_chart(fig_hourly, use_container_width=True)
     
     st.markdown("---")
     
     # Astronomical Data
-    st.markdown("### 🌅 Astronomical Data")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # Sunrise & Sunset
-        sunrise = weather.get('sunrise')
-        sunset = weather.get('sunset')
-        
-        if sunrise and sunset:
-            # Parse times
-            sunrise_time = datetime.fromisoformat(sunrise.replace('Z', '+00:00'))
-            sunset_time = datetime.fromisoformat(sunset.replace('Z', '+00:00'))
-            
-            # Calculate daylight duration
-            daylight_seconds = (sunset_time - sunrise_time).total_seconds()
-            daylight_hours = daylight_seconds / 3600
-            daylight_minutes = (daylight_seconds % 3600) / 60
-            
-            st.markdown(f"""
-            <div style="background: linear-gradient(135deg, #f6d365 0%, #fda085 100%); 
-                        padding: 1.5rem; border-radius: 12px; color: white;">
-                <h4 style="margin: 0 0 1rem 0;">🌅 Sunrise & Sunset</h4>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                    <div>
-                        <p style="margin: 0; opacity: 0.9;">Sunrise</p>
-                        <h3 style="margin: 0.3rem 0;">{sunrise_time.strftime('%H:%M')}</h3>
-                    </div>
-                    <div>
-                        <p style="margin: 0; opacity: 0.9;">Sunset</p>
-                        <h3 style="margin: 0.3rem 0;">{sunset_time.strftime('%H:%M')}</h3>
-                    </div>
-                </div>
-                <hr style="border-color: rgba(255,255,255,0.3); margin: 1rem 0;">
-                <p style="margin: 0;"><b>Daylight Duration:</b> {int(daylight_hours)}h {int(daylight_minutes)}m</p>
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.info("Sunrise/Sunset data not available")
-        
-        st.markdown("<br>", unsafe_allow_html=True)
-        
-        # Sunshine Duration
-        sunshine_duration = weather.get('sunshine_duration', 0)
-        sunshine_hours = sunshine_duration / 3600
-        
-        # Calculate sunshine percentage
-        if sunrise and sunset:
-            sunshine_percentage = (sunshine_duration / daylight_seconds) * 100 if daylight_seconds > 0 else 0
-        else:
-            sunshine_percentage = 0
-        
-        st.markdown(f"""
-        <div style="background: #f7fafc; padding: 1.5rem; border-radius: 8px; border: 2px solid #e2e8f0;">
-            <h4 style="margin: 0 0 1rem 0;">☀️ Sunshine Duration</h4>
-            <h2 style="color: #f6d365; margin: 0;">{sunshine_hours:.1f} hours</h2>
-            <p style="color: #666; margin: 0.5rem 0 0 0;">
-                {sunshine_percentage:.1f}% of daylight hours
-            </p>
-            <div style="background: #e2e8f0; height: 10px; border-radius: 5px; margin-top: 1rem; overflow: hidden;">
-                <div style="background: linear-gradient(90deg, #f6d365 0%, #fda085 100%); 
-                            height: 100%; width: {sunshine_percentage}%;"></div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        # Moon Phase
-        moon_data = calculate_moon_phase()
-        
-        st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                    padding: 1.5rem; border-radius: 12px; color: white; text-align: center;">
-            <h4 style="margin: 0 0 1rem 0;">🌙 Moon Phase</h4>
-            <div style="font-size: 5rem; margin: 1rem 0;">{moon_data['emoji']}</div>
-            <h3 style="margin: 0.5rem 0;">{moon_data['phase_name']}</h3>
-            <p style="opacity: 0.9; margin: 0.5rem 0;">
-                Illumination: {moon_data['illumination']}%
-            </p>
-            <p style="opacity: 0.9; margin: 0; font-size: 0.9rem;">
-                Age: {moon_data['age_days']:.1f} days
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        st.markdown("<br>", unsafe_allow_html=True)
-        
-        # Current Time & Timezone
-        # Use timezone from API for accurate local time
-        timezone = weather.get('timezone', 'UTC')
-        current_time_str = weather.get('time', '')
-        
-        # Parse the current time from API (which is in location's timezone)
-        if current_time_str:
-            try:
-                current_time = datetime.fromisoformat(current_time_str.replace('Z', '+00:00'))
-                time_display = current_time.strftime('%H:%M:%S')
-                date_display = current_time.strftime('%A, %B %d, %Y')
-            except:
-                current_time = datetime.now()
-                time_display = current_time.strftime('%H:%M:%S')
-                date_display = current_time.strftime('%A, %B %d, %Y')
-        else:
-            current_time = datetime.now()
-            time_display = current_time.strftime('%H:%M:%S')
-            date_display = current_time.strftime('%A, %B %d, %Y')
-        
-        st.markdown(f"""
-        <div style="background: #f7fafc; padding: 1.5rem; border-radius: 8px; border: 2px solid #e2e8f0;">
-            <h4 style="margin: 0 0 1rem 0;">🕐 Local Time</h4>
-            <h2 style="color: #667eea; margin: 0;">{time_display}</h2>
-            <p style="color: #666; margin: 0.5rem 0 0 0;">
-                {date_display}
-            </p>
-            <p style="color: #666; margin: 0.5rem 0 0 0; font-size: 0.9rem;">
-                Timezone: {timezone}
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    st.markdown("---")
-    
-    # Wind information
-    st.markdown("### 🌬️ Wind Information")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # Wind compass
-        wind_dir = weather.get('wind_direction', 0)
-        wind_speed = weather.get('wind_speed', 0)
-        
-        fig = go.Figure()
-        
-        # Add compass
-        fig.add_trace(go.Scatterpolar(
-            r=[wind_speed],
-            theta=[wind_dir],
-            mode='markers+text',
-            marker=dict(size=20, color='#667eea'),
-            text=[f'{wind_speed} km/h'],
-            textposition='top center'
-        ))
-        
-        fig.update_layout(
-            polar=dict(
-                radialaxis=dict(visible=True, range=[0, max(wind_speed * 1.5, 20)]),
-                angularaxis=dict(direction='clockwise', rotation=90)
-            ),
-            showlegend=False,
-            title="Wind Direction",
-            height=300
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
-    
-    with col2:
-        st.markdown(f"""
-        **Wind Details:**
-        - **Speed:** {weather.get('wind_speed', 'N/A')} km/h
-        - **Direction:** {weather.get('wind_direction', 'N/A')}°
-        - **Gusts:** {weather.get('wind_gusts', 'N/A')} km/h
-        
-        **Precipitation:**
-        - **Current:** {weather.get('precipitation', 'N/A')} mm
-        
-        **Last Updated:**
-        - {weather.get('time', 'N/A')}
-        """)
-    
-    st.markdown("---")
-    
-    # Quick navigation
-    st.markdown("### 🎯 View More")
+    st.markdown("## 🌙 Data Astronomi")
     
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        if st.button("📅 7-Day Forecast", use_container_width=True):
+        sunrise = weather.get('sunrise', '')
+        sunset = weather.get('sunset', '')
+        
+        if sunrise and sunset:
+            try:
+                sunrise_time = datetime.fromisoformat(sunrise.replace('Z', '+00:00')).strftime('%H:%M')
+                sunset_time = datetime.fromisoformat(sunset.replace('Z', '+00:00')).strftime('%H:%M')
+            except:
+                sunrise_time = "N/A"
+                sunset_time = "N/A"
+        else:
+            sunrise_time = "N/A"
+            sunset_time = "N/A"
+        
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); padding: 1.5rem; border-radius: 12px; color: white;">
+            <h4 style="margin: 0 0 1rem 0;">☀️ Matahari</h4>
+            <p style="margin: 0.5rem 0;"><strong>Terbit:</strong> {sunrise_time}</p>
+            <p style="margin: 0.5rem 0;"><strong>Terbenam:</strong> {sunset_time}</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        sunshine_duration = weather.get('sunshine_duration', 0)
+        sunshine_hours = sunshine_duration / 3600 if sunshine_duration else 0
+        
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); padding: 1.5rem; border-radius: 12px; color: white;">
+            <h4 style="margin: 0 0 1rem 0;">🌞 Durasi Sinar</h4>
+            <p style="margin: 0.5rem 0;"><strong>Hari Ini:</strong> {sunshine_hours:.1f} jam</p>
+            <p style="margin: 0.5rem 0;"><strong>Persentase:</strong> {(sunshine_hours/12*100):.0f}%</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        moon_phase = calculate_moon_phase()
+        
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); padding: 1.5rem; border-radius: 12px; color: #2c3e50;">
+            <h4 style="margin: 0 0 1rem 0;">🌙 Fase Bulan</h4>
+            <div style="font-size: 3rem; text-align: center; margin: 0.5rem 0;">{moon_phase['emoji']}</div>
+            <p style="margin: 0.5rem 0; text-align: center;"><strong>{moon_phase['phase_name']}</strong></p>
+            <p style="margin: 0.5rem 0; text-align: center; font-size: 0.9rem;">Iluminasi: {moon_phase['illumination']:.0f}%</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # Weather Alerts & Recommendations
+    st.markdown("## ⚠️ Rekomendasi & Peringatan")
+    
+    alerts = []
+    
+    # Temperature alerts
+    if temp > 35:
+        alerts.append(("🔥 Suhu Sangat Panas", "Hindari aktivitas berat di luar ruangan. Minum banyak air.", "#e53e3e"))
+    elif temp < 10:
+        alerts.append(("🥶 Suhu Dingin", "Kenakan pakaian hangat saat keluar.", "#4299e1"))
+    
+    # Wind alerts
+    if wind_speed > 40:
+        alerts.append(("💨 Angin Kencang", "Berhati-hati saat berkendara. Amankan barang-barang ringan.", "#ed8936"))
+    
+    # Humidity alerts
+    if humidity > 80:
+        alerts.append(("💧 Kelembaban Tinggi", "Udara terasa lembab. Gunakan AC atau dehumidifier.", "#3498db"))
+    elif humidity < 30:
+        alerts.append(("🏜️ Kelembaban Rendah", "Udara kering. Gunakan pelembab udara.", "#f39c12"))
+    
+    # UV alerts
+    if uv_risk == "Tinggi":
+        alerts.append(("☀️ Risiko UV Tinggi", "Gunakan tabir surya SPF 30+. Hindari sinar matahari langsung 10:00-16:00.", "#e67e22"))
+    
+    if alerts:
+        for title, message, color in alerts:
+            st.markdown(f"""
+            <div style="background: {color}22; border-left: 4px solid {color}; padding: 1rem; border-radius: 4px; margin: 0.5rem 0;">
+                <h4 style="margin: 0 0 0.5rem 0; color: {color};">{title}</h4>
+                <p style="margin: 0; color: #2c3e50;">{message}</p>
+            </div>
+            """, unsafe_allow_html=True)
+    else:
+        st.success("✅ Tidak ada peringatan cuaca. Kondisi aman untuk beraktivitas.")
+    
+    st.markdown("---")
+    
+    # Quick navigation
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if st.button("📅 Prakiraan 7 Hari", use_container_width=True):
             st.switch_page("pages/03_📅_7-Day_Forecast.py")
     
     with col2:
-        if st.button("⏰ Hourly Forecast", use_container_width=True):
-            st.switch_page("pages/04_⏰_Hourly_Forecast.py")
+        if st.button("📡 Radar Cuaca", use_container_width=True):
+            st.switch_page("pages/10_📡_Weather_Radar.py")
     
     with col3:
-        if st.button("🗺️ Change Location", use_container_width=True):
+        if st.button("🗺️ Ganti Lokasi", use_container_width=True):
             st.switch_page("pages/01_🗺️_Interactive_Map.py")
 
 else:
-    st.error("❌ Unable to fetch weather data. Please try again or select a different location.")
-    if st.button("🗺️ Select Different Location"):
+    st.error("❌ Tidak dapat mengambil data cuaca. Silakan coba lagi.")
+    if st.button("🗺️ Pilih Lokasi Lain"):
         st.switch_page("pages/01_🗺️_Interactive_Map.py")
