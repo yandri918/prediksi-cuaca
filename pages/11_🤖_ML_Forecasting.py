@@ -183,17 +183,31 @@ if train_button:
             ))
         
         # API Forecast
-        if api_forecast is not None:
+        if api_forecast is not None and len(api_forecast) > 0:
             api_dates = pd.to_datetime(api_forecast['time']).tolist()[:forecast_days]
-            api_temps = api_forecast['temperature_2m_mean'].tolist()[:forecast_days]
             
-            fig.add_trace(go.Scatter(
-                x=api_dates,
-                y=api_temps,
-                name='API Forecast',
-                line=dict(color='#e53e3e', width=3, dash='dash'),
-                mode='lines+markers'
-            ))
+            # Try different column names for temperature
+            if 'temperature_2m_mean' in api_forecast.columns:
+                api_temps = api_forecast['temperature_2m_mean'].tolist()[:forecast_days]
+            elif 'temperature_2m_max' in api_forecast.columns and 'temperature_2m_min' in api_forecast.columns:
+                # Calculate mean from max and min
+                api_temps = ((api_forecast['temperature_2m_max'] + api_forecast['temperature_2m_min']) / 2).tolist()[:forecast_days]
+            else:
+                # Fallback to first temperature column found
+                temp_cols = [col for col in api_forecast.columns if 'temperature' in col.lower()]
+                if temp_cols:
+                    api_temps = api_forecast[temp_cols[0]].tolist()[:forecast_days]
+                else:
+                    api_temps = None
+            
+            if api_temps:
+                fig.add_trace(go.Scatter(
+                    x=api_dates,
+                    y=api_temps,
+                    name='API Forecast',
+                    line=dict(color='#e53e3e', width=3, dash='dash'),
+                    mode='lines+markers'
+                ))
         
         fig.update_layout(
             title='Temperature Forecast Comparison',
@@ -218,25 +232,42 @@ if train_button:
         st.markdown("## 📊 Model Performance")
         
         # Calculate metrics against API forecast (as baseline)
-        if api_forecast is not None:
-            api_temps_array = np.array(api_temps)
+        if api_forecast is not None and len(api_forecast) > 0:
+            # Get API temperatures with proper column handling
+            if 'temperature_2m_mean' in api_forecast.columns:
+                api_temps_list = api_forecast['temperature_2m_mean'].tolist()[:forecast_days]
+            elif 'temperature_2m_max' in api_forecast.columns and 'temperature_2m_min' in api_forecast.columns:
+                api_temps_list = ((api_forecast['temperature_2m_max'] + api_forecast['temperature_2m_min']) / 2).tolist()[:forecast_days]
+            else:
+                temp_cols = [col for col in api_forecast.columns if 'temperature' in col.lower()]
+                if temp_cols:
+                    api_temps_list = api_forecast[temp_cols[0]].tolist()[:forecast_days]
+                else:
+                    api_temps_list = None
             
-            metrics_data = []
-            for model_name, result in results.items():
-                model_forecast = result['forecast'][:len(api_temps_array)]
-                metrics = calculate_metrics(api_temps_array, model_forecast)
-                metrics_data.append({
-                    'Model': model_name,
-                    'MAE (°C)': f"{metrics['MAE']:.2f}",
-                    'RMSE (°C)': f"{metrics['RMSE']:.2f}",
-                    'MAPE (%)': f"{metrics['MAPE']:.2f}",
-                    'Training Time (s)': f"{training_times[model_name]:.1f}"
-                })
-            
-            metrics_df = pd.DataFrame(metrics_data)
-            st.dataframe(metrics_df, use_container_width=True, hide_index=True)
-            
-            st.info("📌 **Note:** Metrics calculated by comparing ML forecasts with API forecast (baseline)")
+            if api_temps_list:
+                api_temps_array = np.array(api_temps_list)
+                
+                metrics_data = []
+                for model_name, result in results.items():
+                    model_forecast = result['forecast'][:len(api_temps_array)]
+                    metrics = calculate_metrics(api_temps_array, model_forecast)
+                    metrics_data.append({
+                        'Model': model_name,
+                        'MAE (°C)': f"{metrics['MAE']:.2f}",
+                        'RMSE (°C)': f"{metrics['RMSE']:.2f}",
+                        'MAPE (%)': f"{metrics['MAPE']:.2f}",
+                        'Training Time (s)': f"{training_times[model_name]:.1f}"
+                    })
+                
+                metrics_df = pd.DataFrame(metrics_data)
+                st.dataframe(metrics_df, use_container_width=True, hide_index=True)
+                
+                st.info("📌 **Note:** Metrics calculated by comparing ML forecasts with API forecast (baseline)")
+            else:
+                st.warning("⚠️ Unable to calculate metrics - API forecast temperature data not available")
+        else:
+            st.warning("⚠️ API forecast not available for comparison")
         
         st.markdown("---")
         
@@ -273,13 +304,23 @@ if train_button:
                 ))
                 
                 # API
-                if api_forecast is not None:
-                    fig_ensemble.add_trace(go.Scatter(
-                        x=api_dates,
-                        y=api_temps,
-                        name='API',
-                        line=dict(color='#e53e3e', width=2, dash='dash')
-                    ))
+                if api_forecast is not None and len(api_forecast) > 0:
+                    # Get API temps with proper column handling
+                    if 'temperature_2m_mean' in api_forecast.columns:
+                        api_temps_for_chart = api_forecast['temperature_2m_mean'].tolist()[:forecast_days]
+                    elif 'temperature_2m_max' in api_forecast.columns and 'temperature_2m_min' in api_forecast.columns:
+                        api_temps_for_chart = ((api_forecast['temperature_2m_max'] + api_forecast['temperature_2m_min']) / 2).tolist()[:forecast_days]
+                    else:
+                        temp_cols = [col for col in api_forecast.columns if 'temperature' in col.lower()]
+                        api_temps_for_chart = api_forecast[temp_cols[0]].tolist()[:forecast_days] if temp_cols else None
+                    
+                    if api_temps_for_chart:
+                        fig_ensemble.add_trace(go.Scatter(
+                            x=api_dates,
+                            y=api_temps_for_chart,
+                            name='API',
+                            line=dict(color='#e53e3e', width=2, dash='dash')
+                        ))
                 
                 fig_ensemble.update_layout(
                     title='Ensemble vs API Forecast',
@@ -295,7 +336,7 @@ if train_button:
                 st.markdown("- Equal weight average")
                 st.markdown(f"- {len(results)} models combined")
                 
-                if api_forecast is not None:
+                if api_forecast is not None and len(api_forecast) > 0 and api_temps_list:
                     ensemble_metrics = calculate_metrics(api_temps_array, ensemble[:len(api_temps_array)])
                     st.markdown("**Performance:**")
                     st.metric("MAE", f"{ensemble_metrics['MAE']:.2f}°C")
@@ -343,8 +384,16 @@ if train_button:
             export_data[f'{model_name}_Lower'] = result['lower_bound']
             export_data[f'{model_name}_Upper'] = result['upper_bound']
         
-        if api_forecast is not None:
-            export_data['API_Forecast'] = api_temps
+        if api_forecast is not None and len(api_forecast) > 0:
+            # Get API temps with proper column handling
+            if 'temperature_2m_mean' in api_forecast.columns:
+                export_data['API_Forecast'] = api_forecast['temperature_2m_mean'].tolist()[:forecast_days]
+            elif 'temperature_2m_max' in api_forecast.columns and 'temperature_2m_min' in api_forecast.columns:
+                export_data['API_Forecast'] = ((api_forecast['temperature_2m_max'] + api_forecast['temperature_2m_min']) / 2).tolist()[:forecast_days]
+            else:
+                temp_cols = [col for col in api_forecast.columns if 'temperature' in col.lower()]
+                if temp_cols:
+                    export_data['API_Forecast'] = api_forecast[temp_cols[0]].tolist()[:forecast_days]
         
         if len(results) > 1:
             export_data['Ensemble_Forecast'] = ensemble
