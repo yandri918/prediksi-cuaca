@@ -165,7 +165,6 @@ if hourly_forecast is not None and len(hourly_forecast) > 0:
         ],
         colorbar=dict(
             title="Intensity<br>(mm/h)",
-            titleside="right",
             tickmode="linear",
             tick0=0,
             dtick=2,
