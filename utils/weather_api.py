@@ -245,8 +245,13 @@ def get_historical_weather(lat, lon, start_date, end_date):
                 "temperature_2m_max",
                 "temperature_2m_min",
                 "temperature_2m_mean",
+                "apparent_temperature_max",
+                "apparent_temperature_min",
                 "precipitation_sum",
-                "wind_speed_10m_max"
+                "wind_speed_10m_max",
+                "wind_gusts_10m_max",
+                "uv_index_max",
+                "uv_index_clear_sky_max"
             ],
             "timezone": "auto"
         }
