@@ -449,7 +449,7 @@ if weather_df is not None and len(weather_df) > 0:
             xaxis_title='Temperature (°C)',
             yaxis_title='Frequency',
             height=350
-        ))
+        )
         
         st.plotly_chart(temp_hist, use_container_width=True)
     
