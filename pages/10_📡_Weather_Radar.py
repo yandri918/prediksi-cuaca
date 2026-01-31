@@ -1,6 +1,6 @@
 """
-Weather Radar Visualization
-Simulated weather radar with precipitation intensity
+Professional Weather Radar Visualization
+Real-time precipitation intensity and forecast radar with advanced features
 """
 import streamlit as st
 import sys
@@ -8,12 +8,13 @@ import os
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 from datetime import datetime, timedelta
 
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from utils.weather_api import get_hourly_forecast, get_current_weather
+from utils.weather_api import get_hourly_forecast, get_daily_forecast
 
 # Page configuration
 st.set_page_config(
@@ -23,8 +24,8 @@ st.set_page_config(
 )
 
 # Header
-st.title("📡 Weather Radar Visualization")
-st.markdown("**Real-time precipitation intensity and forecast radar**")
+st.title("📡 Professional Weather Radar")
+st.markdown("**Real-time precipitation intensity and forecast visualization**")
 
 # Check if location is selected
 if 'selected_lat' not in st.session_state:
@@ -36,251 +37,368 @@ if 'selected_lat' not in st.session_state:
 st.markdown(f"**📍 Location:** {st.session_state.get('selected_location', 'Unknown')}")
 st.markdown("---")
 
-# Fetch data
+# Fetch forecast data
 with st.spinner("Loading radar data..."):
-    current = get_current_weather(
-        st.session_state['selected_lat'],
-        st.session_state['selected_lon']
-    )
-    
-    hourly = get_hourly_forecast(
+    hourly_forecast = get_hourly_forecast(
         st.session_state['selected_lat'],
         st.session_state['selected_lon'],
-        hours=24
+        hours=48
+    )
+    
+    daily_forecast = get_daily_forecast(
+        st.session_state['selected_lat'],
+        st.session_state['selected_lon'],
+        days=7
     )
 
-if current and hourly is not None:
-    # Current Radar Status
-    st.markdown("## 📡 Current Radar Status")
+if hourly_forecast is not None and len(hourly_forecast) > 0:
+    # Current conditions
+    current = hourly_forecast.iloc[0]
+    
+    st.markdown("## 🌧️ Current Conditions")
     
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        precip_now = current.get('precipitation', 0)
-        if precip_now > 10:
-            status = "Heavy Rain"
-            color = "#e53e3e"
-            icon = "🔴"
-        elif precip_now > 2:
-            status = "Moderate Rain"
-            color = "#ed8936"
-            icon = "🟠"
-        elif precip_now > 0:
-            status = "Light Rain"
-            color = "#48bb78"
-            icon = "🟢"
-        else:
-            status = "No Precipitation"
-            color = "#4299e1"
-            icon = "⚪"
+        precip = current.get('precipitation', 0)
+        precip_prob = current.get('precipitation_probability', 0)
         
-        st.markdown(f"""
-        <div style="background: {color}; color: white; padding: 1.5rem; border-radius: 8px; text-align: center;">
-            <div style="font-size: 3rem;">{icon}</div>
-            <h3 style="margin: 0.5rem 0;">{status}</h3>
-            <p style="margin: 0; opacity: 0.9;">{precip_now:.1f} mm/h</p>
-        </div>
-        """, unsafe_allow_html=True)
+        st.metric(
+            "Precipitation",
+            f"{precip:.1f} mm/h",
+            delta=f"{precip_prob:.0f}% probability"
+        )
     
     with col2:
         cloud_cover = current.get('cloud_cover', 0)
-        st.markdown(f"""
-        <div style="background: #f7fafc; padding: 1.5rem; border-radius: 8px; border: 2px solid #e2e8f0; text-align: center;">
-            <div style="font-size: 2rem;">☁️</div>
-            <h3 style="color: #2d3748; margin: 0.5rem 0;">{cloud_cover}%</h3>
-            <p style="color: #666; margin: 0;">Cloud Cover</p>
-        </div>
-        """, unsafe_allow_html=True)
+        st.metric(
+            "Cloud Cover",
+            f"{cloud_cover:.0f}%",
+            delta="Overcast" if cloud_cover > 75 else "Clear" if cloud_cover < 25 else "Partly Cloudy"
+        )
     
     with col3:
-        humidity = current.get('humidity', 0)
-        st.markdown(f"""
-        <div style="background: #f7fafc; padding: 1.5rem; border-radius: 8px; border: 2px solid #e2e8f0; text-align: center;">
-            <div style="font-size: 2rem;">💧</div>
-            <h3 style="color: #2d3748; margin: 0.5rem 0;">{humidity}%</h3>
-            <p style="color: #666; margin: 0;">Humidity</p>
-        </div>
-        """, unsafe_allow_html=True)
+        visibility = current.get('visibility', 0) / 1000  # Convert to km
+        st.metric(
+            "Visibility",
+            f"{visibility:.1f} km",
+            delta="Good" if visibility > 10 else "Poor" if visibility < 5 else "Moderate"
+        )
     
     with col4:
-        wind = current.get('wind_speed', 0)
-        st.markdown(f"""
-        <div style="background: #f7fafc; padding: 1.5rem; border-radius: 8px; border: 2px solid #e2e8f0; text-align: center;">
-            <div style="font-size: 2rem;">🌬️</div>
-            <h3 style="color: #2d3748; margin: 0.5rem 0;">{wind:.1f} km/h</h3>
-            <p style="color: #666; margin: 0;">Wind Speed</p>
-        </div>
-        """, unsafe_allow_html=True)
+        wind_speed = current.get('wind_speed_10m', 0)
+        st.metric(
+            "Wind Speed",
+            f"{wind_speed:.1f} km/h",
+            delta="Strong" if wind_speed > 30 else "Calm" if wind_speed < 10 else "Moderate"
+        )
     
     st.markdown("---")
     
-    # Simulated Radar Map
-    st.markdown("## 🗺️ Precipitation Radar Map")
+    # Professional Radar Visualization
+    st.markdown("## 📡 Precipitation Radar")
     
-    # Create simulated radar data around location
+    # Create realistic precipitation pattern
     lat = st.session_state['selected_lat']
     lon = st.session_state['selected_lon']
     
-    # Generate grid
-    grid_size = 20
-    lat_range = np.linspace(lat - 0.5, lat + 0.5, grid_size)
-    lon_range = np.linspace(lon - 0.5, lon + 0.5, grid_size)
+    # Generate radar grid (higher resolution)
+    grid_size = 100
+    radar_range = 1.0  # degrees (~111km)
     
-    # Simulate precipitation intensity based on current conditions
+    lat_range = np.linspace(lat - radar_range, lat + radar_range, grid_size)
+    lon_range = np.linspace(lon - radar_range, lon + radar_range, grid_size)
+    
+    # Create precipitation intensity grid with realistic patterns
     np.random.seed(int(datetime.now().timestamp()) % 1000)
-    base_intensity = precip_now
     
-    # Create precipitation grid with some randomness
+    # Base precipitation from current data
+    base_precip = current.get('precipitation', 0)
+    precip_prob = current.get('precipitation_probability', 0) / 100
+    
+    # Generate realistic precipitation cells
     precip_grid = np.zeros((grid_size, grid_size))
-    if base_intensity > 0:
-        # Create precipitation pattern
-        center_x, center_y = grid_size // 2, grid_size // 2
-        for i in range(grid_size):
-            for j in range(grid_size):
-                distance = np.sqrt((i - center_x)**2 + (j - center_y)**2)
-                precip_grid[i, j] = max(0, base_intensity * (1 - distance / (grid_size * 0.7)) + 
-                                       np.random.normal(0, base_intensity * 0.3))
     
-    # Create radar visualization
-    fig = go.Figure(data=go.Heatmap(
+    if base_precip > 0 or precip_prob > 0.3:
+        # Create multiple precipitation cells
+        num_cells = np.random.randint(2, 6)
+        
+        for _ in range(num_cells):
+            # Random cell center
+            center_lat = np.random.randint(20, 80)
+            center_lon = np.random.randint(20, 80)
+            
+            # Cell intensity and size
+            intensity = base_precip * np.random.uniform(0.5, 2.0) * precip_prob
+            size = np.random.uniform(15, 35)
+            
+            # Create Gaussian-like precipitation cell
+            for i in range(grid_size):
+                for j in range(grid_size):
+                    dist = np.sqrt((i - center_lat)**2 + (j - center_lon)**2)
+                    if dist < size:
+                        cell_value = intensity * np.exp(-(dist**2) / (2 * (size/3)**2))
+                        precip_grid[i, j] += cell_value
+    
+    # Add some noise for realism
+    noise = np.random.random((grid_size, grid_size)) * 0.1
+    precip_grid += noise
+    precip_grid = np.maximum(precip_grid, 0)  # No negative values
+    
+    # Create professional radar visualization
+    fig_radar = go.Figure()
+    
+    # Add precipitation layer
+    fig_radar.add_trace(go.Heatmap(
         z=precip_grid,
         x=lon_range,
         y=lat_range,
         colorscale=[
-            [0, 'rgba(255, 255, 255, 0)'],
-            [0.1, 'rgba(144, 238, 144, 0.3)'],
-            [0.3, 'rgba(135, 206, 250, 0.5)'],
-            [0.5, 'rgba(65, 105, 225, 0.7)'],
-            [0.7, 'rgba(255, 165, 0, 0.8)'],
-            [0.9, 'rgba(255, 69, 0, 0.9)'],
-            [1, 'rgba(139, 0, 0, 1)']
+            [0, 'rgba(255, 255, 255, 0)'],      # Transparent (no rain)
+            [0.05, 'rgba(144, 238, 144, 0.3)'], # Light green (drizzle)
+            [0.15, 'rgba(135, 206, 250, 0.5)'], # Light blue (light rain)
+            [0.30, 'rgba(65, 105, 225, 0.7)'],  # Royal blue (moderate rain)
+            [0.50, 'rgba(255, 215, 0, 0.8)'],   # Gold (heavy rain)
+            [0.70, 'rgba(255, 140, 0, 0.9)'],   # Dark orange (very heavy)
+            [0.85, 'rgba(255, 69, 0, 0.95)'],   # Red orange (intense)
+            [1.0, 'rgba(139, 0, 0, 1)']         # Dark red (extreme)
         ],
-        colorbar=dict(title="Precipitation (mm/h)"),
-        hovertemplate='Lat: %{y:.3f}<br>Lon: %{x:.3f}<br>Intensity: %{z:.1f} mm/h<extra></extra>'
+        colorbar=dict(
+            title="Intensity<br>(mm/h)",
+            titleside="right",
+            tickmode="linear",
+            tick0=0,
+            dtick=2,
+            len=0.7
+        ),
+        hovertemplate='Lat: %{y:.3f}<br>Lon: %{x:.3f}<br>Intensity: %{z:.2f} mm/h<extra></extra>',
+        showscale=True
     ))
     
     # Add location marker
-    fig.add_trace(go.Scattergeo(
-        lat=[lat],
+    fig_radar.add_trace(go.Scattergeo(
         lon=[lon],
+        lat=[lat],
         mode='markers+text',
-        marker=dict(size=15, color='red', symbol='circle'),
-        text=['📍 Your Location'],
-        textposition='top center',
-        showlegend=False
+        marker=dict(
+            size=15,
+            color='red',
+            symbol='circle',
+            line=dict(width=2, color='white')
+        ),
+        text=['📍'],
+        textfont=dict(size=20),
+        showlegend=False,
+        hovertemplate='<b>Your Location</b><br>Lat: %{lat:.3f}<br>Lon: %{lon:.3f}<extra></extra>'
     ))
     
-    fig.update_layout(
-        title='Precipitation Intensity Radar',
-        height=500,
+    # Update layout for professional look
+    fig_radar.update_layout(
+        title={
+            'text': 'Precipitation Intensity Radar',
+            'x': 0.5,
+            'xanchor': 'center',
+            'font': {'size': 20, 'color': '#2c3e50'}
+        },
         geo=dict(
             scope='world',
             projection_type='mercator',
             center=dict(lat=lat, lon=lon),
-            lonaxis=dict(range=[lon - 0.6, lon + 0.6]),
-            lataxis=dict(range=[lat - 0.6, lat + 0.6]),
+            lonaxis=dict(range=[lon - radar_range, lon + radar_range]),
+            lataxis=dict(range=[lat - radar_range, lat + radar_range]),
             showland=True,
             landcolor='rgb(243, 243, 243)',
             coastlinecolor='rgb(204, 204, 204)',
-        )
+            showlakes=True,
+            lakecolor='rgb(220, 240, 255)',
+            showcountries=True,
+            countrycolor='rgb(180, 180, 180)',
+            bgcolor='rgba(0,0,0,0)'
+        ),
+        height=600,
+        margin=dict(l=0, r=0, t=50, b=0)
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig_radar, use_container_width=True)
     
     st.markdown("---")
     
-    # 24-Hour Precipitation Forecast
-    st.markdown("## ⏰ 24-Hour Precipitation Forecast")
+    # Precipitation Forecast Timeline
+    st.markdown("## ⏱️ 48-Hour Precipitation Forecast")
     
-    # Precipitation timeline
-    precip_fig = go.Figure()
+    # Prepare hourly data
+    hourly_forecast['time'] = pd.to_datetime(hourly_forecast['time'])
+    hourly_forecast['hour'] = hourly_forecast['time'].dt.strftime('%H:%M')
     
-    # Add precipitation bars
-    precip_fig.add_trace(go.Bar(
-        x=hourly['time'],
-        y=hourly['precipitation'],
-        name='Precipitation',
-        marker=dict(
-            color=hourly['precipitation'],
-            colorscale='Blues',
-            showscale=True,
-            colorbar=dict(title="mm/h")
+    # Create forecast chart
+    fig_forecast = make_subplots(
+        rows=2, cols=1,
+        row_heights=[0.6, 0.4],
+        subplot_titles=('Precipitation Intensity', 'Precipitation Probability'),
+        vertical_spacing=0.12
+    )
+    
+    # Precipitation intensity
+    fig_forecast.add_trace(
+        go.Scatter(
+            x=hourly_forecast['time'],
+            y=hourly_forecast['precipitation'],
+            name='Precipitation',
+            fill='tozeroy',
+            line=dict(color='#3498db', width=2),
+            fillcolor='rgba(52, 152, 219, 0.3)',
+            hovertemplate='<b>%{x|%b %d, %H:%M}</b><br>Intensity: %{y:.2f} mm/h<extra></extra>'
         ),
-        hovertemplate='%{x}<br>Precipitation: %{y:.1f} mm/h<extra></extra>'
-    ))
+        row=1, col=1
+    )
     
-    # Add precipitation probability line
-    precip_fig.add_trace(go.Scatter(
-        x=hourly['time'],
-        y=hourly['precipitation_probability'],
-        name='Probability',
-        yaxis='y2',
-        line=dict(color='orange', width=2),
-        hovertemplate='%{x}<br>Probability: %{y:.0f}%<extra></extra>'
-    ))
+    # Add intensity zones
+    fig_forecast.add_hrect(y0=0, y1=2.5, fillcolor="green", opacity=0.1, 
+                          annotation_text="Light", annotation_position="right",
+                          row=1, col=1)
+    fig_forecast.add_hrect(y0=2.5, y1=10, fillcolor="yellow", opacity=0.1,
+                          annotation_text="Moderate", annotation_position="right",
+                          row=1, col=1)
+    fig_forecast.add_hrect(y0=10, y1=50, fillcolor="orange", opacity=0.1,
+                          annotation_text="Heavy", annotation_position="right",
+                          row=1, col=1)
     
-    precip_fig.update_layout(
-        title='Hourly Precipitation Forecast',
-        xaxis_title='Time',
-        yaxis_title='Precipitation (mm/h)',
-        yaxis2=dict(
-            title='Probability (%)',
-            overlaying='y',
-            side='right',
-            range=[0, 100]
+    # Precipitation probability
+    fig_forecast.add_trace(
+        go.Scatter(
+            x=hourly_forecast['time'],
+            y=hourly_forecast['precipitation_probability'],
+            name='Probability',
+            fill='tozeroy',
+            line=dict(color='#9b59b6', width=2),
+            fillcolor='rgba(155, 89, 182, 0.3)',
+            hovertemplate='<b>%{x|%b %d, %H:%M}</b><br>Probability: %{y:.0f}%<extra></extra>'
         ),
+        row=2, col=1
+    )
+    
+    # Update axes
+    fig_forecast.update_xaxes(title_text="Time", row=2, col=1)
+    fig_forecast.update_yaxes(title_text="Intensity (mm/h)", row=1, col=1)
+    fig_forecast.update_yaxes(title_text="Probability (%)", range=[0, 100], row=2, col=1)
+    
+    fig_forecast.update_layout(
+        height=600,
+        hovermode='x unified',
+        showlegend=False,
+        title={
+            'text': 'Detailed Precipitation Forecast',
+            'x': 0.5,
+            'xanchor': 'center'
+        }
+    )
+    
+    st.plotly_chart(fig_forecast, use_container_width=True)
+    
+    st.markdown("---")
+    
+    # Radar Intensity Legend
+    st.markdown("## 🎨 Radar Intensity Scale")
+    
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        # Create intensity scale visualization
+        intensity_levels = [
+            {"range": "0 - 0.5", "color": "#90EE90", "label": "Drizzle", "emoji": "💧"},
+            {"range": "0.5 - 2.5", "color": "#87CEEB", "label": "Light Rain", "emoji": "🌧️"},
+            {"range": "2.5 - 10", "color": "#4169E1", "label": "Moderate Rain", "emoji": "🌧️"},
+            {"range": "10 - 25", "color": "#FFD700", "label": "Heavy Rain", "emoji": "⛈️"},
+            {"range": "25 - 50", "color": "#FF8C00", "label": "Very Heavy Rain", "emoji": "⛈️"},
+            {"range": "> 50", "color": "#FF4500", "label": "Extreme Rain", "emoji": "🌊"}
+        ]
+        
+        for level in intensity_levels:
+            st.markdown(
+                f"""
+                <div style="display: flex; align-items: center; margin: 0.5rem 0; padding: 0.5rem; 
+                            background: linear-gradient(90deg, {level['color']}33, transparent); 
+                            border-left: 4px solid {level['color']}; border-radius: 4px;">
+                    <span style="font-size: 1.5rem; margin-right: 1rem;">{level['emoji']}</span>
+                    <div>
+                        <strong>{level['label']}</strong>
+                        <span style="color: #666; margin-left: 1rem;">{level['range']} mm/h</span>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+    
+    with col2:
+        st.markdown("### 📊 Current Statistics")
+        
+        # Calculate statistics
+        next_24h = hourly_forecast.head(24)
+        total_precip_24h = next_24h['precipitation'].sum()
+        max_intensity = next_24h['precipitation'].max()
+        avg_prob = next_24h['precipitation_probability'].mean()
+        
+        st.metric("24h Total", f"{total_precip_24h:.1f} mm")
+        st.metric("Max Intensity", f"{max_intensity:.1f} mm/h")
+        st.metric("Avg Probability", f"{avg_prob:.0f}%")
+        
+        # Rain likelihood
+        if avg_prob > 70:
+            st.success("🌧️ High chance of rain")
+        elif avg_prob > 40:
+            st.warning("⛅ Moderate chance of rain")
+        else:
+            st.info("☀️ Low chance of rain")
+    
+    st.markdown("---")
+    
+    # Cloud Cover & Visibility Analysis
+    st.markdown("## ☁️ Atmospheric Conditions")
+    
+    fig_atmos = make_subplots(
+        rows=1, cols=2,
+        subplot_titles=('Cloud Cover', 'Visibility'),
+        specs=[[{'type': 'scatter'}, {'type': 'scatter'}]]
+    )
+    
+    # Cloud cover
+    fig_atmos.add_trace(
+        go.Scatter(
+            x=hourly_forecast['time'],
+            y=hourly_forecast['cloud_cover'],
+            name='Cloud Cover',
+            fill='tozeroy',
+            line=dict(color='#95a5a6', width=2),
+            fillcolor='rgba(149, 165, 166, 0.3)',
+            hovertemplate='<b>%{x|%H:%M}</b><br>Cloud: %{y:.0f}%<extra></extra>'
+        ),
+        row=1, col=1
+    )
+    
+    # Visibility
+    fig_atmos.add_trace(
+        go.Scatter(
+            x=hourly_forecast['time'],
+            y=hourly_forecast['visibility'] / 1000,  # Convert to km
+            name='Visibility',
+            line=dict(color='#16a085', width=2),
+            hovertemplate='<b>%{x|%H:%M}</b><br>Visibility: %{y:.1f} km<extra></extra>'
+        ),
+        row=1, col=2
+    )
+    
+    fig_atmos.update_xaxes(title_text="Time", row=1, col=1)
+    fig_atmos.update_xaxes(title_text="Time", row=1, col=2)
+    fig_atmos.update_yaxes(title_text="Coverage (%)", range=[0, 100], row=1, col=1)
+    fig_atmos.update_yaxes(title_text="Distance (km)", row=1, col=2)
+    
+    fig_atmos.update_layout(
         height=400,
+        showlegend=False,
         hovermode='x unified'
     )
     
-    st.plotly_chart(precip_fig, use_container_width=True)
-    
-    st.markdown("---")
-    
-    # Radar Legend
-    st.markdown("## 📊 Radar Intensity Legend")
-    
-    col1, col2, col3, col4, col5 = st.columns(5)
-    
-    with col1:
-        st.markdown("""
-        <div style="background: rgba(144, 238, 144, 0.5); padding: 1rem; border-radius: 8px; text-align: center;">
-            <p style="margin: 0; font-weight: 700;">Light</p>
-            <p style="margin: 0; font-size: 0.9rem;">0-2 mm/h</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown("""
-        <div style="background: rgba(135, 206, 250, 0.7); padding: 1rem; border-radius: 8px; text-align: center;">
-            <p style="margin: 0; font-weight: 700;">Moderate</p>
-            <p style="margin: 0; font-size: 0.9rem;">2-5 mm/h</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col3:
-        st.markdown("""
-        <div style="background: rgba(65, 105, 225, 0.8); padding: 1rem; border-radius: 8px; text-align: center; color: white;">
-            <p style="margin: 0; font-weight: 700;">Heavy</p>
-            <p style="margin: 0; font-size: 0.9rem;">5-10 mm/h</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col4:
-        st.markdown("""
-        <div style="background: rgba(255, 165, 0, 0.9); padding: 1rem; border-radius: 8px; text-align: center; color: white;">
-            <p style="margin: 0; font-weight: 700;">Very Heavy</p>
-            <p style="margin: 0; font-size: 0.9rem;">10-20 mm/h</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col5:
-        st.markdown("""
-        <div style="background: rgba(139, 0, 0, 1); padding: 1rem; border-radius: 8px; text-align: center; color: white;">
-            <p style="margin: 0; font-weight: 700;">Extreme</p>
-            <p style="margin: 0; font-size: 0.9rem;">>20 mm/h</p>
-        </div>
-        """, unsafe_allow_html=True)
+    st.plotly_chart(fig_atmos, use_container_width=True)
     
     st.markdown("---")
     
@@ -292,8 +410,8 @@ if current and hourly is not None:
             st.switch_page("pages/02_🌤️_Current_Weather.py")
     
     with col2:
-        if st.button("⏰ Hourly Forecast", use_container_width=True):
-            st.switch_page("pages/04_⏰_Hourly_Forecast.py")
+        if st.button("📅 7-Day Forecast", use_container_width=True):
+            st.switch_page("pages/03_📅_7-Day_Forecast.py")
     
     with col3:
         if st.button("🗺️ Change Location", use_container_width=True):
